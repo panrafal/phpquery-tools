@@ -65,25 +65,31 @@ class Sanitizer {
      * 
      * @param phpQueryObject $pq phpQuery object
      * @param $selector Selector to use
-     * @param $callback
+     * @param $callback Callback to use or NULL
      * @param $opts Additional options to pass to the callback
+     * 
+     * @return phpQueryObject
      */
-    public function invokeSelector($pq, $selector, callable $callback, $opts = null) {
-        if ($selector === true) $selector = '*';
-        
-        if (is_string($selector)) {
-            $callback($pq->find($selector), $opts);
+    public function invokeSelector($pq, $selector, callable $callback = null, $opts = null) {
+        $found = null;
+        if ($selector === true) {
+            $found = $pq->find('*');
+        } elseif (is_string($selector)) {
+            $found = $pq->find($selector);
         } elseif (is_callable($selector)) {
-            $callback($selector($pq), $opts);
+            $found = $selector($pq);
         } elseif (is_array($selector) && isset($selector[1])) {
+            $found = $this->invokeSelector($pq, $selector[0]);
             if (is_callable($selector[1])) {
-                $callback($pq->find($selector[0])->filterCallback($selector[1]), $opts);
+                $found = $found->filterCallback($selector[1]);
             } else {
-                $callback($pq->find($selector[0])->filterCallback(function($i, $node) use ($selector) {
+                $found = $found->filterCallback(function($i, $node) use ($selector) {
                     return $this->checkFilter($node->tagName, $selector[1]);
-                }), $opts);
+                });
             }
         }
+        if ($found && $callback) $callback($found, $opts);
+        return $found;
     }
     
     /** Returns TRUE if value matches the filter 

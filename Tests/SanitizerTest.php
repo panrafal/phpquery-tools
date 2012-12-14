@@ -21,11 +21,13 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
     /**
      * @dataProvider sanitizeProvider
      */
-    public function testSanitize(Sanitizer $sanitizer, $html, $expected, $error = 'Different HTML') {
+    public function testSanitize(Sanitizer $sanitizer, $html, $expected, $error = 'Different HTML', $innerSelector = false) {
         if (is_string($html)) $html = phpQuery::newDocumentXHTML($html);
-        $sanitizer->sanitize($html);
+        $sanitizer->sanitize($innerSelector ? $html->find($innerSelector) : $html);
 //        $this->assertEquals($this->skipWhitespace($expected), $this->skipWhitespace($html->html()), 'Different HTML');
-        $this->assertXmlStringEqualsXmlString($expected, $html->html(), $error);
+        $actual = $html->html();
+        if ($actual && $expected && strpos($actual, '<') !== false && strpos($expected, '<') !== false) $this->assertXmlStringEqualsXmlString($expected, $actual, $error);
+        else $this->assertEquals($expected, $actual);
     }
     
     protected function skipWhitespace($html) {
@@ -39,49 +41,81 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
     public function sanitizeProvider() {
         $list = array();
         
-        $html = '<body>Some <b>simple</b> <a href="/html" class="link int">html</a><br />
-            <h2>Some <i>section</i><a name="section" /></h2>
-            <p style="margin:10px; font-size:20px;" align="left">
-                <ul><li>1</li><li><u>2</u></li><li><img src="some.png" border="1" /></li></ul>
-            </p>
-            <span class="hidden"><h2>Another section</h2></span>
-            <a href="//a.com" rel="nofollow"><img src="//a.com/some.png" /> link</a><br />
-            <script>
-                alert("A little bit of <test>scripting!</test>");
-            </script>
-            <span class="text">And <b>some <u>text</u></b></span>
-            </body>';
+        $html = '<html>
+            <head>
+                 <title>Test</title>
+                 <meta name="description" content="" />
+            </head>
+            <body>
+                Some <b>simple</b> <a href="/html" name="link" class="link int">html</a><br />
+                <h2>Some <i>section</i><a name="section" /></h2>
+                <p style="margin:10px; font-size:20px;" align="left" id="article">
+                    <ul style="list-style:none;" class="list important" id="list">
+                        <li><font color="red">1</font></li>
+                        <li><u>2</u></li>
+                        <li><img src="some.png" border="1" /></li>
+                    </ul>
+                </p>
+                <span class="hidden"><h2>Another section</h2></span>
+                <a href="//a.com" rel="nofollow"><img src="//a.com/some.png" /> link</a><br />
+                <h3>Subsection</h3>
+                <script>
+                    alert("A little bit of <test>scripting!</test>");
+                </script>
+                <span class="text">And <b>some <u> deep text</u></b></span>
+            </body></html>';
         
         $s = new Sanitizer();
-        $s->addRemoveTags('a[href*="//"],a[name],img,script,.hidden');
-        $list['removeTags'] = [$s, $html, 
-            '<body>Some <b>simple</b> <a href="/html" class="link int">html</a><br />
-            <h2>Some <i>section</i></h2>
-            <p style="margin:10px; font-size:20px;" align="left">
-                <ul><li>1</li><li><u>2</u></li><li></li></ul>
-            </p>
-            
-            <br />
-            
-            <span class="text">And <b>some <u>text</u></b></span>
-            </body>'];
+        $s->addRemoveTags('head *:not(title)');
+        $s->addRemoveTags('a[name]:not([href]),.hidden,script,style,object');
+        $s->addUnwrapTags('a[href*="//"]');
+        $s->addUnwrapTags(['body *', ['deny' => '/^(a|b|i|u|p|h\d|span|ul|ol|li|br)$/']]);
+        $s->addFilterAttributes(true, ['href', 'class', 'id', 'style', 'rel'], ['important', 'link'], ['list-style'], ['article']);
+        
+        $list['Sanitized HTML'] = [$s, $html, 
+            '<html>
+            <head>
+                 <title>Test</title>
+            </head>
+            <body>
+                Some <b>simple</b> <a href="/html" class="link">html</a><br />
+                <h2>Some <i>section</i></h2>
+                <p id="article">
+                    <ul style="list-style:none" class="important">
+                        <li>1</li>
+                        <li><u>2</u></li>
+                        <li></li>
+                    </ul>
+                </p>
+                
+                 link<br />
+                <h3>Subsection</h3>
+                
+                <span>And <b>some <u> deep text</u></b></span>
+            </body></html>'];
         
         $s = new Sanitizer();
-        $s->addUnwrapTags('a,ul,li,p,i');
-        $s->addUnwrapTags('body>u');
-        $s->addUnwrapTags(['span', function($i, \DOMElement $node) { return $node->getAttribute('class') == 'hidden'; }]);
-        $list['unwrapTags'] = [$s, $html, 
-            '<body>Some <b>simple</b> html<br />
-            <h2>Some section</h2>
-            
-                12<img src="some.png" border="1" />
-            
-            <h2>Another section</h2>
-            <img src="//a.com/some.png" /> link<br />
-            <script>
-                alert("A little bit of <test>scripting!</test>");
-            </script>
-            <span class="text">And <b>some <u>text</u></b></span>
+        $s->addRemoveTags('head');
+        $s->addRemoveTags('a[name]:not([href]),.hidden,script,style,object');
+        $s->addUnwrapTags('html');
+        $s->addUnwrapTags(['body *', ['deny' => '/^(a|b|i|u|p|h\d|ul|ol|li|br)$/']]);
+        $s->addFilterAttributes(true, ['href']);
+        $list['Simple article'] = [$s, $html, 
+            '<body>
+                Some <b>simple</b> <a href="/html">html</a><br />
+                <h2>Some <i>section</i></h2>
+                <p>
+                    <ul>
+                        <li>1</li>
+                        <li><u>2</u></li>
+                        <li></li>
+                    </ul>
+                </p>
+                
+                <a href="//a.com"> link</a><br />
+                <h3>Subsection</h3>
+                
+                And <b>some <u> deep text</u></b>
             </body>'];
 
         
@@ -106,10 +140,41 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
      * @todo   Implement testEachSelector().
      */
     public function testEachSelector() {
-        // Remove the following lines when you implement this test.
-        $this->markTestIncomplete(
-                'This test has not been implemented yet.'
-        );
+        $s = new Sanitizer();
+        $s->addRemoveTags(true);
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+                                '<body>Test  </body>', 'using all', 'body');
+        
+        $s = new Sanitizer();
+        $s->addRemoveTags('a,b>c');
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some<c>3</c></b><a>2</a></body>', 
+                                '<body>Test  <b>some</b></body>', 'using selector');
+        
+        $s = new Sanitizer();
+        $s->addRemoveTags(function($pq) { return $pq->find('a'); });
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+                                '<body>Test  <b>some</b></body>', 'using callback');
+        
+        $s = new Sanitizer();
+        $s->addRemoveTags(array(true, '/^a$/'));
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+                                '<body>Test  <b>some</b></body>', 'using filter', 'body');
+        
+        $s = new Sanitizer();
+        $s->addRemoveTags(array(true, array('deny' => '/^b|body$/')));
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+                                '<body>Test  <b>some</b></body>', 'using deny filter', 'body');
+        
+        
+        $s = new Sanitizer();
+        $s->addRemoveTags(array(true, function($i, $node) { return $node->tagName == 'a'; }));
+        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+                                '<body>Test  <b>some</b></body>', 'using filter callback', 'body');
+        
+//        $s = new Sanitizer();
+//        $s->addRemoveTags([true]);
+//        $this->testSanitize($s, '<body>Test <a>1</a> <b>some</b><a>2</a></body>', 
+//                                '<body>Test  <b>some</b></body>');
     }
 
     /**

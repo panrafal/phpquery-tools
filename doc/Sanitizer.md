@@ -20,7 +20,7 @@ a defined preset.
 Selector can be:
 
 -  **TRUE** to select every element
--  **SELECTOR** string with jQuery-like selector (```'a,div.some-class'```)
+-  **jQuery selector** string with jQuery-like selector (```'a,div.some-class'```)
 -  **callable($queryObject)** returning phpQueryObject with elements
 -  **array(SELECTOR, FILTER)** to first find, and then filter by tagname the nodes (eg. array('*', ['script','meta']))
 -  **array(SELECTOR, callback($index, $node))** to first find, and then filter the nodes. Callback should return TRUE to include the node.
