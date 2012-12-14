@@ -11,10 +11,30 @@ a defined preset.
 
 ### Sample
 
-```code php
+This will essentialy convert the HTML into an article (no HTML, or BODY tags) and strip most of the tags and styling.
 
+In order:
+
+- strip out script, style, object, named anchors, tags with `hidden` class
+- unwrap html and body
+- unwrap contents of any tags other than `/^(a|b|i|u|p|h\d|ul|ol|li|br)$/i`
+- remove all attributes except 'href', 'class', 'id', 'style', 'rel'
+- remove all classes except 'important', 'link'
+- remove all styles except 'list-style'
+
+```php
+$doc = phpQuery::newDocumentFileXHTML($html);
+$s = new Sanitizer();
+$s->addRemoveTags('head')
+  ->addRemoveTags('a[name]:not([href]),.hidden,script,style,object')
+  ->addUnwrapTags('html,body')
+  ->addUnwrapTags([true, ['deny' => '/^(a|b|i|u|p|h\d|ul|ol|li|br)$/i']])
+  ->addFilterAttributes(true, ['href', 'class', 'id', 'style', 'rel'], ['important', 'link'], ['list-style'])
+  ->sanitize($doc)
+  ;
 ```
- 
+
+
 ## Selectors
 
 Selector can be:
