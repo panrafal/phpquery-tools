@@ -1,7 +1,7 @@
 {
     "name": "stamina/phpquery-tools",
     "type": "library",
-    "description": "phpQuery tools for ",
+    "description": "phpQuery tools for extracting links and sanitizing HTML documents using phpQuery",
     "keywords": [],
     "homepage": "https://github.com/panrafal/phpquery-tools",
     "license": "MIT",
