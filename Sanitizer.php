@@ -8,6 +8,8 @@
 
 namespace Stamina\PhpQuery;
 
+use DOMAttr;
+use DOMElement;
 use DOMNode;
 use phpQueryObject;
 
@@ -84,7 +86,7 @@ class Sanitizer {
                 $found = $found->filterCallback($selector[1]);
             } else {
                 $found = $found->filterCallback(function($i, $node) use ($selector) {
-                    return $this->checkFilter($node->tagName, $selector[1]);
+                    return $this->applyFilter($node->tagName, $selector[1]);
                 });
             }
         }
@@ -95,23 +97,36 @@ class Sanitizer {
     /** Returns TRUE if value matches the filter 
      * 
      */
-    public function checkFilter($value, $filter) {
-        if (is_bool($filter)) return $filter;
+    public function applyFilter($value, $filter) {
+        if (is_bool($filter)) return $filter ? $value : false;
         if (is_string($filter)) {
-            return preg_match($filter, $value);
+            return ($filter{0} === '/' ? preg_match($filter, $value) : strcasecmp($filter, $value) === 0) ? $value : false;
         } else if (is_array($filter)) {
+            if (isset($filter['replace'])) {
+                if (!is_array($filter['replace'])) $filter['replace'] = array(array(true, $filter['replace']));
+                foreach($filter['replace'] as $k => $v) {
+                    if (is_int($k)) {
+                        $k = $v[0];
+                        $v = $v[1];
+                    }
+                    if ($k === true || $this->applyFilter($value, $k)) {
+                        return is_callable($v) && !is_string($v) ? call_user_func($v, $value) : $v;
+                    }
+                }
+            }
             if (isset($filter['allow'])) {
-                return $this->checkFilter($value, $filter['allow']);
+                return $this->applyFilter($value, $filter['allow']);
             }
             if (isset($filter['deny'])) {
-                return $this->checkFilter($value, $filter['deny']) == false;
+                return $this->applyFilter($value, $filter['deny']) == false ? $value : false;
             }
-            return in_array($value, $filter);
+            return in_array($value, $filter) ? $value : false;
         }
-        return true;
+        return $value;
     }    
     
-    /** Removes tags and their contents 
+    /**
+     * Queues remove tags and their contents 
      * @return self
      */
     public function addRemoveTags($selector) {
@@ -120,7 +135,9 @@ class Sanitizer {
         });
     }
     
-    /** Unwraps tags - remove the tag, move the contents up one level 
+    /** 
+     * Queues unwrap tags - remove the tag, move the contents up one level 
+     * 
      * @return self
      */
     public function addUnwrapTags($selector) {
@@ -130,6 +147,8 @@ class Sanitizer {
     }
 
     /**
+     * Queues self::filterAttributes()
+     * 
      * @return self
      */
     public function addFilterAttributes($selector, $attributes, $classes = null, $styles = null, $ids = null) {
@@ -138,6 +157,53 @@ class Sanitizer {
         });
     }    
     
+    /**
+     * Queues renameTags
+     * 
+     */
+    public function addRenameTags($selector, $filters) {
+        return $this->add($selector, function($found) use ($filters) {
+            $this->renameTags($found, $filters);
+        });
+    }    
+    
+    /**
+     * Renames tags according to filters
+     * 
+     * /---code php
+     * $s->replaceTags($element, [['/^old$/', 'new'], ['/^old2$/', function() {return $new;}], 'old' => 'new']);
+     * \---
+     * 
+     * @param $filters Filter replacement. @see doc/Sanitizer.md - replace syntax
+     * @return array Renamed elements
+     */
+    public function renameTags($elements, $filters) {
+        if ($elements instanceof DOMNode) $elements = (array) $elements;
+        $renamed = [];
+        foreach($elements as $element) {
+            /* @var $element DOMElement */
+            $tagName = trim($this->applyFilter($element->tagName, array('replace' => $filters)));
+            if (!$tagName || strcasecmp($tagName, $element->tagName) == 0) continue;
+            $renamed[] = $this->renameTag($element, $tagName);
+        }
+        return $renamed;
+    }
+    
+    public function renameTag( DOMElement $oldTag, $newTagName ) {
+        $document = $oldTag->ownerDocument;
+
+        $newTag = $document->createElement($newTagName);
+        $oldTag->parentNode->replaceChild($newTag, $oldTag);
+        foreach ($oldTag->attributes as $attribute) {
+            $newTag->setAttribute($attribute->name, $attribute->value);
+        }
+        foreach (iterator_to_array($oldTag->childNodes) as $child) {
+            $newTag->appendChild($oldTag->removeChild($child));
+        }
+        return $newTag;
+    }
+
+
     /** 
      * Filters attributes on a list of elements
      * 
@@ -159,7 +225,12 @@ class Sanitizer {
             if ($attributes !== null) {
                 foreach(iterator_to_array($element->attributes) as $attr) {
                     /* @var $attr DOMAttr */
-                    if ($this->checkFilter($attr->name, $attributes) == false) $element->removeAttributeNode($attr);
+                    $filtered = $this->applyFilter($attr->name, $attributes);
+                    if ($filtered == false) $element->removeAttributeNode($attr);
+                    elseif ($filtered != $attr->name) {
+                        $element->setAttribute($filtered, $attr->value);
+                        $element->removeAttributeNode($attr);
+                    }
                 }
             }
             if ($classes !== null && $element->hasAttribute('class')) {
@@ -173,7 +244,9 @@ class Sanitizer {
                 else $element->removeAttribute('style');
             }
             if ($ids !== null && $element->hasAttribute('id')) {
-                if ($this->checkFilter($element->getAttribute('id'), $ids) == false) $element->removeAttribute('id');
+                $filtered = $this->applyFilter($element->getAttribute('id'), $ids);
+                if ($filtered == false) $element->removeAttribute('id');
+                elseif ($filtered != $element->getAttribute('id')) $element->setAttribute('id', $filtered);
             }
         }
         return $this;
@@ -183,7 +256,8 @@ class Sanitizer {
     public function filterClasses($classes, $filter) {
         $newClass = '';
         foreach(preg_split('/\s+/', trim($classes), -1, PREG_SPLIT_NO_EMPTY) as $className) {
-            if ($this->checkFilter($className, $filter)) $newClass .= ' '.$className;
+            $className = $this->applyFilter($className, $filter);
+            if ($className) $newClass .= ' '.$className;
         }
         return substr($newClass, 1);
     }
@@ -206,8 +280,9 @@ class Sanitizer {
         $newStyle = '';
         $style = trim($style);
         foreach(preg_split('/\s*;\s*/', $style, -1, PREG_SPLIT_NO_EMPTY) as $styleItem) {
-            $styleName = strstr($styleItem, ':', true);
-            if ($this->checkFilter($styleName, $filter)) $newStyle .= $styleItem . '; ';
+            $styleParts = explode(':', $styleItem, 2);
+            $styleParts[0] = $this->applyFilter($styleParts[0], $filter);
+            if ($styleParts[0]) $newStyle .= $styleParts[0] . (empty($styleParts[1]) ? '' : ':' . $styleParts[1]) . '; ';
         }
         return substr($newStyle, 0, -2);
     }

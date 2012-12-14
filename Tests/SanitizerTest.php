@@ -241,6 +241,11 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
         $s->addFilterAttributes('a,b', null, ['deny' => '/link/']);
         $this->testSanitize($s, '<body><a rel="no" href="#" class="link ext">123<b class=" bold" style="font-weight:bold;">456</b></a></body>', 
                                 '<body><a rel="no" href="#" class="ext">123<b class="bold" style="font-weight:bold;">456</b></a></body>');
+        
+        $s = new Sanitizer();
+        $s->addFilterAttributes('a,b', null, ['replace' => ['ext' => 'external'], 'deny' => ['bold']]);
+        $this->testSanitize($s, '<body><a rel="no" href="#" class="link ext">123<b class=" bold" style="font-weight:bold;">456</b></a></body>', 
+                                '<body><a rel="no" href="#" class="link external">123<b style="font-weight:bold;">456</b></a></body>');
     }
     
     /**
@@ -257,7 +262,7 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
                                 '<body><a class="link ext" style="color:#222">123<b class="bold">456</b></a></body>');
 
         $s = new Sanitizer();
-        $s->addFilterAttributes('a,b', null, null, ['margin', 'color', null]);
+        $s->addFilterAttributes('a,b', null, null, ['margin', 'color', 'badstyle']);
         $this->testSanitize($s, '<body><a class="link ext" style="margin:20px; color:#222; badstyle">123<b class="bold" style="font-weight:bold;">456</b></a></body>', 
                                 '<body><a class="link ext" style="margin:20px; color:#222; badstyle">123<b class="bold">456</b></a></body>');
 
@@ -293,15 +298,34 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
         $this->testSanitize($s, '<body><a rel="no" id="Test1">123<b id="test2">456</b></a></body>', 
                                 '<body><a rel="no" id="Test1">123<b>456</b></a></body>');
 
+        $s = new Sanitizer();
+        $s->addFilterAttributes('a,b', null, null, null, ['replace' => ['test1' => 'blah']]);
+        $this->testSanitize($s, '<body><a rel="no" id="Test1">123<b id="test2">456</b></a></body>', 
+                                '<body><a rel="no" id="blah">123<b>456</b></a></body>');
+
     }    
     
-    /** @dataProvider checkFilterProvider */
-    public function testCheckFilter($expected, $value, $filter) {
+    public function testRenameTags() {
         $s = new Sanitizer();
-        $this->assertEquals($expected, $s->checkFilter($value, $filter));
+        $s->addRenameTags('b', 'strong');
+        $this->testSanitize($s, '<body><a rel="no" id="Test1"><b></b>123<b id="test2">456<u class="deep">underl<i>i</i>ne</u></b></a></body>', 
+                                '<body><a rel="no" id="Test1"><strong></strong>123<strong id="test2">456<u class="deep">underl<i>i</i>ne</u></strong></a></body>');
+
+        $s = new Sanitizer();
+        $s->addRenameTags('a,b', ['B' => 'strong']);
+        $this->testSanitize($s, '<body><a rel="no" id="Test1"><b></b>123<b id="test2">456<u class="deep">underl<i>i</i>ne</u></b></a></body>', 
+                                '<body><a rel="no" id="Test1"><strong></strong>123<strong id="test2">456<u class="deep">underl<i>i</i>ne</u></strong></a></body>');
+
+    }    
+    
+    /** @dataProvider applyFilterProvider */
+    public function testApplyFilter($expected, $value, $filter) {
+        $s = new Sanitizer();
+        if ($expected === true) $expected = $value;
+        $this->assertEquals($expected, $s->applyFilter($value, $filter));
     }
     
-    public function checkFilterProvider() {
+    public function applyFilterProvider() {
         return [
             [true, 'a', true],
             [false, 'a', false],
@@ -313,6 +337,11 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
             [false, 'href', ['deny' => '/ref/']],
             [false, 'href', ['deny' => ['href']]],
             [true, 'href', ['deny' => ['ref']]],
+            ['link', 'href', ['replace' => 'link']],
+            ['link', 'href', ['replace' => ['HRef' => 'link']]],
+            [false, 'href', ['replace' => ['/HRef/' => 'link']]],
+            ['link', 'href', ['replace' => [['ref', 'plink'], ['href', 'link']]]],
+            ['link', 'href', ['replace' => ['HRef' => function() {return 'link';}]]],
         ];
     }
     

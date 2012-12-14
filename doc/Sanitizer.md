@@ -50,6 +50,9 @@ Selector can be:
 
 Filters can be:
 
--  Regular expression matching allowed values (```'/^(href|rel)$/i'```)
+-  String with allowed value (case insensitive)
+-  Regular expression matching allowed values (using '/' delimiter) (```'/^(href|rel)$/i'```)
 -  Array with allowed values (```['href', 'rel']```)
 -  Hashmap with "allow" or "deny" filters (```['deny' => '/^font-/i']```)
+-  Hashmap with "replace" array specifying [FILTER, replacement], or FILTER => replacement pairs 
+   (``` [['/^old$/', 'new'], ['/^old2$/', function() {return $new;}], 'old' => 'new'] ```)
