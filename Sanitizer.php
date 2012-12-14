@@ -126,9 +126,9 @@ class Sanitizer {
     /**
      * @return self
      */
-    public function addFilterAttributes($selector, $attributes, $classes = null, $styles = null) {
-        return $this->add($selector, function($found) use ($attributes, $classes, $styles) {
-            $this->filterAttributes($found, $attributes, $classes, $styles);
+    public function addFilterAttributes($selector, $attributes, $classes = null, $styles = null, $ids = null) {
+        return $this->add($selector, function($found) use ($attributes, $classes, $styles, $ids) {
+            $this->filterAttributes($found, $attributes, $classes, $styles, $ids);
         });
     }    
     

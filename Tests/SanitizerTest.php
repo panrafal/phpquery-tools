@@ -214,6 +214,22 @@ class SanitizerTest extends PHPUnit_Framework_TestCase {
 
     }
 
+    
+    /**
+     */
+    public function testFilterAttributes_ids() {
+        $s = new Sanitizer();
+        $s->addFilterAttributes('a,b', null, null, null, false);
+        $this->testSanitize($s, '<body><a rel="no" id="Test1">123<b id="test2">456</b></a></body>', 
+                                '<body><a rel="no">123<b>456</b></a></body>');
+
+        $s = new Sanitizer();
+        $s->addFilterAttributes('a,b', null, null, null, '/Test/');
+        $this->testSanitize($s, '<body><a rel="no" id="Test1">123<b id="test2">456</b></a></body>', 
+                                '<body><a rel="no" id="Test1">123<b>456</b></a></body>');
+
+    }    
+    
     /** @dataProvider checkFilterProvider */
     public function testCheckFilter($expected, $value, $filter) {
         $s = new Sanitizer();
