@@ -55,4 +55,4 @@ Filters can be:
 -  Array with allowed values (```['href', 'rel']```)
 -  Hashmap with "allow" or "deny" filters (```['deny' => '/^font-/i']```)
 -  Hashmap with "replace" array specifying [FILTER, replacement], or FILTER => replacement pairs 
-   (``` [['/^old$/', 'new'], ['/^old2$/', function() {return $new;}], 'old' => 'new'] ```)
+   (``` ['replace' => [['/^old$/', 'new'], ['/^old2$/', function() {return $new;}], 'old' => 'new']] ```)

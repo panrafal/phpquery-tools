@@ -22,19 +22,19 @@ use phpQueryObject;
  */
 class Sanitizer {
     
-    protected $queue;
+    protected $queue = [];
     
     /** Sanitizes document using current operations queue 
      * 
      * @param phpQueryObject $pq phpQueryObject with document to sanitize
      * 
-     * @return self
+     * @return phpQueryObject
      */
     public function sanitize($pq) {
         foreach($this->queue as $item) {
             $this->invokeSelector($pq, $item[0], $item[1]);
         }
-        return $this;
+        return $pq;
     }
     
     /** Returns the queue as [[selector, callback]] */
