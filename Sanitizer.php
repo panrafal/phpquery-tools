@@ -62,6 +62,12 @@ class Sanitizer {
         return $this;
     }
     
+    /** Moves last added action to another place */
+    public function move($newIndex) {
+        $action = array_pop($this->queue);
+        array_splice($this->queue, $newIndex, 0, array($action));
+    }
+    
     /**
      * Calls $callback($queryObject) on selector
      * 
