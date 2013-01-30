@@ -39,8 +39,9 @@ You will also need a phpQuery library. You can use mine, but it's not hosted on 
 
 ```phpunit --bootstrap Tests/bootstrap.php Tests```
 
+[![githalytics.com alpha](https://cruel-carlota.pagodabox.com/e45151580c5809603c05b7e53039065f "githalytics.com")](http://githalytics.com/panrafal/phpquery-tools)
+
 
 [1]: http://code.google.com/p/phpquery/
 [2]: http://jquery.com/
-
 
